@@ -429,7 +429,7 @@ class DuckDuckGoFetcher(DataFetcher):
     def __init__(self, analyzer):
         super().__init__(analyzer)
         self.last_request_time = 0
-        self.min_interval = 2.0
+        self.min_interval = 3.5  # 增加間隔避免被封鎖
     
     def _rate_limit_wait(self):
         elapsed = time.time() - self.last_request_time
@@ -458,12 +458,12 @@ class DuckDuckGoFetcher(DataFetcher):
                             if search_type == "news":
                                 res = list(ddgs.news(
                                     query=q_str, region=ddg_region, safesearch='moderate', 
-                                    timelimit='y', max_results=limit * 2
+                                    timelimit='y', max_results=min(limit + 5, 15)  # 減少請求量
                                 ))
                             else:
                                 res = list(ddgs.text(
                                     query=q_str, region=ddg_region, safesearch='moderate', 
-                                    backend='html', max_results=limit * 2
+                                    backend='html', max_results=min(limit + 5, 15)  # 減少請求量
                                 ))
                             
                             if res:
@@ -472,17 +472,19 @@ class DuckDuckGoFetcher(DataFetcher):
                         
                         if search_results: break # 跳出重試迴圈
                         
-                        time.sleep(2.0)
+                        time.sleep(3.0 + random.uniform(0, 1.5))  # 隨機延遲避免規律性
                         
-                    except Exception:
+                    except Exception as e:
+                        st.warning(f"⚠️ DDG 嘗試 {attempt+1} 失敗: {str(e)[:80]}")
                         # 最後一次嘗試若是 News 失敗，降級為 Text (Fallback)
                         if attempt == max_retries - 1 and search_type == "news":
                             try:
                                 search_results = list(ddgs.text(
-                                    query=query, region=ddg_region, backend='html', max_results=limit * 2
+                                    query=query, region=ddg_region, backend='html', max_results=min(limit + 5, 15)
                                 ))
-                            except: pass
-                        time.sleep(2.0)
+                            except Exception as fallback_err:
+                                st.error(f"❌ Fallback 也失敗: {str(fallback_err)[:50]}")
+                        time.sleep(3.0 + random.uniform(0, 1.5))
 
                 # 處理結果
                 relevant_count = 0
@@ -495,16 +497,23 @@ class DuckDuckGoFetcher(DataFetcher):
                     url = item.get('url', item.get('href', ''))
                     
                     if not content.strip() or not url: continue
-                    if not self._is_relevant(content, query, 0.2): continue
+                    if not self._is_relevant(content, query, 0.1):  # 降低門檻從 0.2 到 0.1
+                        continue
                     
                     results.append(self._create_result_dict(
                         content=content, platform='DuckDuckGo',
                         url=url, author=item.get('source', 'Web')
                     ))
                     relevant_count += 1
+            
+            # 提供搜尋結果統計
+            if search_results and not results:
+                st.warning(f"⚠️ DDG 回傳 {len(search_results)} 筆，但無符合相關性的結果")
+            elif not search_results:
+                st.warning("⚠️ DDG 未回傳任何結果，可能被限流或查詢過於頻繁")
                     
         except Exception as e:
-            st.error(f"DDG 連線錯誤: {str(e)[:100]}")
+            st.error(f"❌ DDG 連線錯誤: {str(e)[:120]}")
         
         return results
 
