@@ -4,9 +4,9 @@
 整合多個資料源（Reddit、YouTube、Google News、DuckDuckGo）
 支援多模型切換（Gemini AI / OpenAI）與地區篩選
 
-作者：jkloip 陳信勇
+作者：jkloip
 版本：1.1.0 
-更新日期：2026-01-04
+
 """
 
 import streamlit as st
